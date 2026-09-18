@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="The Birth Wheel">
+  <rect width="32" height="32" rx="7" fill="#0a0d16"/>
+  <circle cx="16" cy="16.4" r="12.2" fill="#1b140a"/>
+  <path d="M16 16.4 L16 4.2 A12.2 12.2 0 0 1 27.4 12.2 Z" fill="#c47a32"/>
+  <path d="M16 16.4 L27.4 12.2 A12.2 12.2 0 0 1 27.8 21.1 Z" fill="#d4a84a"/>
+  <path d="M16 16.4 L27.8 21.1 A12.2 12.2 0 0 1 21.4 27.6 Z" fill="#8b3a3a"/>
+  <path d="M16 16.4 L21.4 27.6 A12.2 12.2 0 0 1 10.2 27.1 Z" fill="#3d6b8a"/>
+  <path d="M16 16.4 L10.2 27.1 A12.2 12.2 0 0 1 4.4 19.6 Z" fill="#2f6b52"/>
+  <path d="M16 16.4 L4.4 19.6 A12.2 12.2 0 0 1 5.2 10.8 Z" fill="#6b4a8a"/>
+  <path d="M16 16.4 L5.2 10.8 A12.2 12.2 0 0 1 16 4.2 Z" fill="#b8893a"/>
+  <circle cx="16" cy="16.4" r="12.2" fill="none" stroke="#e2c27a" stroke-width="1.8"/>
+  <circle cx="16" cy="16.4" r="4.4" fill="#0a0d16" stroke="#e2c27a" stroke-width="1.2"/>
+  <circle cx="16" cy="16.4" r="1.5" fill="#e2c27a"/>
+  <path d="M16 2.2 L18.2 6.4 H13.8 Z" fill="#e2c27a"/>
+</svg>
