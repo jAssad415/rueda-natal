@@ -696,15 +696,15 @@ function animateSpin(toRotation, duration, landed) {
   hintEl.textContent = t("hintSpinning");
 
   function frame(now) {
-    const t = Math.min(1, (now - start) / duration);
-    rotation = from + (toRotation - from) * easeOutQuint(t);
+    const progress = Math.min(1, (now - start) / duration);
+    rotation = from + (toRotation - from) * easeOutQuint(progress);
     const peg = Math.floor(rotation / pegStep);
     if (peg !== lastPeg) {
-      playWheelTick(0.28 + (1 - t) * 0.72);
+      playWheelTick(0.28 + (1 - progress) * 0.72);
       lastPeg = peg;
     }
     draw(rotation);
-    if (t < 1) {
+    if (progress < 1) {
       requestAnimationFrame(frame);
     } else {
       playWheelStop();
