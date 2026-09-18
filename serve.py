@@ -18,6 +18,6 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"Rueda natal en http://{HOST}:{PORT}/")
-    print("Dejá esta ventana abierta. Ctrl+C para cortar.")
+    print(f"The Birth Wheel at http://{HOST}:{PORT}/")
+    print("Leave this window open. Ctrl+C to stop.")
     server.serve_forever()

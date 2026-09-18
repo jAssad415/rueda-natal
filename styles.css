@@ -299,11 +299,46 @@ body.nightmare-mode .list-wrap {
   z-index: auto;
 }
 
+body.nightmare-mode .lang-switch {
+  opacity: 1;
+  filter: none;
+}
+
 .hero {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 36px 24px 8px;
+  padding: 52px 24px 8px;
   text-align: center;
+}
+
+.lang-switch {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(16, 21, 34, 0.88);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+}
+
+.lang-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 700 12px/1 "Figtree", system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.lang-switch button[aria-pressed="true"] {
+  background: rgba(226, 194, 122, 0.22);
+  color: var(--gold);
 }
 
 .eyebrow {
@@ -645,6 +680,19 @@ h1 {
 }
 
 @media (max-width: 960px) {
+  .hero {
+    padding-top: 64px;
+  }
+
+  .eyebrow {
+    padding-right: 96px;
+  }
+
+  .lang-switch {
+    top: 10px;
+    right: 10px;
+  }
+
   .layout {
     grid-template-columns: 1fr;
   }

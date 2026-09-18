@@ -1,3 +1,5 @@
+import { I18N, SHORT_EN, SHORT_ES, SPANISH_COUNTRIES, NAME_EN_FIX } from "./i18n.js";
+
 const canvas = document.getElementById("wheel");
 const ctx = canvas.getContext("2d");
 const fxCanvas = document.getElementById("fx");
@@ -9,40 +11,90 @@ const searchEl = document.getElementById("search");
 const statsEl = document.getElementById("stats");
 const methodEl = document.getElementById("method");
 const hintEl = document.getElementById("hint");
+const hubKickerEl = document.getElementById("hub-kicker");
+const hubLabelEl = document.getElementById("hub-label");
 
-const MODES = {
-  easy: {
-    title: "Naciste en modo fácil",
-    copy: "Salud, educación, ingresos, casi garantizados. ¡Felicidades! la suerte giró a tu favor y las oportunidades están a la vuelta de la esquina.",
-  },
-  mid: {
-    title: "Naciste en modo intermedio",
-    copy: "Tendrás buenas condiciones iniciales, pero con desafíos importantes. Factores como la región donde vivas o tu entorno familiar harán la diferencia. Hay margen para progresar pero vas a tener que jugar bien tus cartas.",
-  },
-  hard: {
-    title: "Naciste en modo difícil",
-    copy: "La salud, educación, empleo de calidad y servicios básicos no llegan a todos ni al mismo tiempo. Nadie te regala nada. Nacer en la familia correcta o la ciudad correcta puede cambiar completamente tu partida.",
-  },
-  nightmare: {
-    title: "Naciste en modo pesadilla",
-    copy: "Sobrevivir ya te consumirá energía. Salud precaria, educación limitada, bajos ingresos, pocas redes de seguridad. ¿Cumplir tus sueños? Antes, habrán cuestiones mucho más básicas que resolver. Vida difícil, pero hay que vivirla igual. Millones lo hacen día a día.",
-  },
-};
+const LANG_KEY = "birth-wheel-lang";
+let lang = "en";
+let resultRevealed = false;
 
-function difficulty(hdi) {
-  if (hdi == null) return null;
-  if (hdi >= 0.9) return "easy";
-  if (hdi >= 0.7) return "mid";
-  if (hdi >= 0.55) return "hard";
-  return "nightmare";
+function t(path, vars) {
+  const value = path.split(".").reduce((obj, key) => obj?.[key], I18N[lang]);
+  if (typeof value !== "string") return path;
+  return value.replace(/\{(\w+)\}/g, (_, key) => vars?.[key] ?? "");
 }
 
-const MODE_LABEL = {
-  easy: "fácil",
-  mid: "intermedio",
-  hard: "difícil",
-  nightmare: "pesadilla",
-};
+function locale() {
+  return lang === "es" ? "es" : "en";
+}
+
+function countryName(country) {
+  if (lang === "en") {
+    const raw = country.nameEn || country.name;
+    return NAME_EN_FIX[raw] || raw;
+  }
+  return country.name;
+}
+
+async function detectLang() {
+  try {
+    const response = await fetch("https://get.geojs.io/v1/ip/country.json", { signal: AbortSignal.timeout(2500) });
+    const geo = await response.json();
+    const cc = String(geo.country || "").toUpperCase();
+    if (SPANISH_COUNTRIES.has(cc)) return "es";
+    if (cc) return "en";
+  } catch {
+    /* fall through */
+  }
+  return (navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en";
+}
+
+function updateLangButtons() {
+  for (const btn of document.querySelectorAll(".lang-switch [data-lang]")) {
+    btn.setAttribute("aria-pressed", btn.dataset.lang === lang ? "true" : "false");
+  }
+}
+
+function applyStaticCopy() {
+  document.documentElement.lang = lang;
+  document.title = t("documentTitle");
+  document.getElementById("eyebrow").textContent = t("eyebrow");
+  document.getElementById("brand").textContent = t("brand");
+  document.getElementById("lede").textContent = t("lede");
+  document.getElementById("wheel-panel").setAttribute("aria-label", t("wheelAria"));
+  hubKickerEl.textContent = t("hubKicker");
+  if (!spinning) {
+    hubLabelEl.textContent = winner ? t("hubAgain") : t("hubSpin");
+  }
+  document.querySelector(".lang-switch").setAttribute("aria-label", t("langLabel"));
+  document.getElementById("all-countries").textContent = t("allCountries");
+  searchEl.placeholder = t("searchPlaceholder");
+  if (spinning) {
+    hintEl.textContent = t("hintSpinning");
+  } else if (!winner) {
+    hintEl.textContent = t("hintIdle");
+    resultEl.innerHTML = `
+      <p class="result-kicker">${t("resultEmptyKicker")}</p>
+      <h2>${t("resultEmptyTitle")}</h2>
+      <p class="result-copy">${t("resultEmptyCopy")}</p>
+    `;
+  }
+  updateLangButtons();
+}
+
+function setLang(next, persist) {
+  if (next !== "en" && next !== "es") return;
+  lang = next;
+  if (persist) localStorage.setItem(LANG_KEY, next);
+  applyStaticCopy();
+  if (data) {
+    renderMethod();
+    renderStats();
+    renderRanking(searchEl.value);
+    draw(rotation);
+  }
+  if (winner) renderResult(winner, { revealed: resultRevealed, replay: false });
+}
 
 const TWO_PI = Math.PI * 2;
 const POINTER = -Math.PI / 2;
@@ -67,33 +119,42 @@ let audioCtx = null;
 let rumbleNodes = null;
 let modeAudioNodes = [];
 
+function formatDecimal(n, digits) {
+  const value = Number(n).toFixed(digits);
+  return lang === "es" ? value.replace(".", ",") : value;
+}
+
 function formatInt(n) {
-  return new Intl.NumberFormat("es-AR").format(Math.round(n));
+  return new Intl.NumberFormat(locale()).format(Math.round(n));
 }
 
 function formatPct(p, digits = 2) {
   const pct = p * 100;
-  if (pct >= 1) return `${pct.toFixed(digits)}%`;
-  if (pct >= 0.01) return `${pct.toFixed(3)}%`;
-  if (pct >= 0.0001) return `${pct.toFixed(4)}%`;
-  return "<0.0001%";
+  let value;
+  if (pct >= 1) value = pct.toFixed(digits);
+  else if (pct >= 0.01) value = pct.toFixed(3);
+  else if (pct >= 0.0001) value = pct.toFixed(4);
+  else value = "0.0001";
+  if (lang === "es") value = value.replace(".", ",");
+  return pct >= 0.0001 ? `${value}%` : `<${value}%`;
 }
 
-function shortName(name) {
-  const aliases = {
-    "República Democrática del Congo": "R. D. Congo",
-    "Estados Unidos": "EE. UU.",
-    "Emiratos Árabes Unidos": "EAU",
-    "República Centroafricana": "R. Centroafricana",
-    "Papúa Nueva Guinea": "Papúa N. G.",
-    "San Vicente y las Granadinas": "San Vicente",
-    "San Cristóbal y Nieves": "San Cristóbal",
-    "Santo Tomé y Príncipe": "Santo Tomé",
-    "Bosnia y Herzegovina": "Bosnia",
-    "Macedonia del Norte": "N. Macedonia",
-    "Ciudad del Vaticano": "Vaticano",
-  };
+function shortName(country) {
+  const name = countryName(country);
+  const aliases = lang === "en" ? SHORT_EN : SHORT_ES;
   return aliases[name] || name;
+}
+
+function difficulty(hdi) {
+  if (hdi == null) return null;
+  if (hdi >= 0.9) return "easy";
+  if (hdi >= 0.7) return "mid";
+  if (hdi >= 0.55) return "hard";
+  return "nightmare";
+}
+
+function modeLabel(mode) {
+  return I18N[lang].modes[mode]?.label ?? "";
 }
 
 function oneIn(p) {
@@ -504,9 +565,13 @@ function applyMode(mode) {
 }
 
 function hdiCopy(country) {
-  if (country.hdi == null) return "Sin IDH publicado.";
+  if (country.hdi == null) return t("hdiMissing");
   const mode = difficulty(country.hdi);
-  return `IDH ${country.hdi.toFixed(3)} · modo ${MODE_LABEL[mode]} (${country.hdiYear})`;
+  return t("hdiChip", {
+    hdi: formatDecimal(country.hdi, 3),
+    mode: modeLabel(mode),
+    year: country.hdiYear,
+  });
 }
 
 function prepareSlices(countries) {
@@ -594,7 +659,7 @@ function draw(rot) {
     ctx.font = `600 ${Math.max(11, Math.min(16, slice.sweep * 42))}px Figtree, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(shortName(slice.name), flip ? -labelR : labelR, 0, radius * 0.4);
+    ctx.fillText(shortName(slice), flip ? -labelR : labelR, 0, radius * 0.4);
     ctx.restore();
   }
   ctx.restore();
@@ -628,7 +693,7 @@ function animateSpin(toRotation, duration, landed) {
   spinBtn.disabled = true;
   stopFx();
   startSpinAudio(duration);
-  hintEl.textContent = "Naciendo… la rueda se detiene donde nacería una persona al azar.";
+  hintEl.textContent = t("hintSpinning");
 
   function frame(now) {
     const t = Math.min(1, (now - start) / duration);
@@ -646,7 +711,7 @@ function animateSpin(toRotation, duration, landed) {
       rotation = toRotation;
       spinning = false;
       spinBtn.disabled = false;
-      spinBtn.querySelector(".hub-label").textContent = "Otra";
+      hubLabelEl.textContent = t("hubAgain");
       showResult(landed);
       draw(rotation);
     }
@@ -654,85 +719,118 @@ function animateSpin(toRotation, duration, landed) {
   requestAnimationFrame(frame);
 }
 
-function showResult(country) {
-  clearTimeout(revealTimer);
-  stopFx();
-  winner = country;
-  document.body.classList.add("winner");
-  const mode = difficulty(country.hdi);
-  const hdiHtml = country.hdi == null
-    ? `<p class="hdi-chip">IDH no publicado para este país</p>`
-    : `<p class="hdi-chip ${mode}"><i></i>${hdiCopy(country)}</p>`;
-  const destiny = mode
-    ? `<p class="destiny ${mode}"><strong>${MODES[mode].title}</strong><span>${MODES[mode].copy}</span></p>`
+function resultRestHtml(country, mode) {
+  const info = mode ? I18N[lang].modes[mode] : null;
+  const destiny = info
+    ? `<p class="destiny ${mode}"><strong>${info.title}</strong><span>${info.copy}</span></p>`
     : "";
+  const hdiHtml = country.hdi == null
+    ? `<p class="hdi-chip">${t("hdiMissing")}</p>`
+    : `<p class="hdi-chip ${mode}"><i></i>${hdiCopy(country)}</p>`;
+  return `
+    ${destiny}
+    ${hdiHtml}
+    <p class="result-copy">
+      ${t("probability", { pct: formatPct(country.probability), oneIn: oneIn(country.probability) })}
+    </p>
+    <div class="metrics">
+      <div class="metric"><span>${t("metricBirths")}</span><strong>${formatInt(country.births)}</strong></div>
+      <div class="metric"><span>${t("metricPop")}</span><strong>${formatInt(country.population)}</strong></div>
+      <div class="metric"><span>${t("metricCbr")}</span><strong>${formatDecimal(country.cbr, 1)} ‰</strong></div>
+      <div class="metric"><span>${t("metricHdi")}</span><strong>${country.hdi == null ? t("hdiNone") : formatDecimal(country.hdi, 3)}</strong></div>
+    </div>
+  `;
+}
 
+function fillResultShell(country) {
+  const name = countryName(country);
   resultEl.classList.remove("easy", "mid", "hard", "nightmare");
   resultEl.innerHTML = `
     <div class="result-main">
       <div class="result-identity">
-        <p class="result-kicker">Naciste en</p>
-        <img class="result-flag" alt="Bandera de ${country.name}" src="${flagUrl(country.iso2, 160)}" />
-        <h2>${country.name}</h2>
+        <p class="result-kicker">${t("bornIn")}</p>
+        <img class="result-flag" alt="${t("flagAlt", { name })}" src="${flagUrl(country.iso2, 160)}" />
+        <h2>${name}</h2>
       </div>
     </div>
     <div class="result-rest"></div>
   `;
-  hintEl.textContent = `${country.name} ocupa el ${formatPct(country.probability)} de la rueda.`;
-  spinBtn.querySelector(".hub-label").textContent = "Otra";
-  ensureAudio();
+  hintEl.textContent = t("hintLanded", { name, pct: formatPct(country.probability) });
+  hubLabelEl.textContent = t("hubAgain");
+}
 
+function revealResultDetails(country, mode) {
+  const main = resultEl.querySelector(".result-main");
+  const rest = resultEl.querySelector(".result-rest");
+  if (!rest) return;
+  if (mode) resultEl.classList.add(mode);
+  if (mode === "nightmare" && main && !main.querySelector(".result-skull")) {
+    main.insertAdjacentHTML("beforeend", `<img class="result-skull" src="assets/skull.png" alt="${t("skullAlt")}" />`);
+  }
+  rest.innerHTML = resultRestHtml(country, mode);
+  requestAnimationFrame(() => rest.classList.add("is-in"));
+}
+
+function renderResult(country, { revealed = false, replay = true } = {}) {
+  winner = country;
+  const mode = difficulty(country.hdi);
+  document.body.classList.add("winner");
+  fillResultShell(country);
+  if (revealed) {
+    resultRevealed = true;
+    revealResultDetails(country, mode);
+    return;
+  }
+  if (!replay) return;
+  resultRevealed = false;
+  clearTimeout(revealTimer);
+  stopFx();
+  ensureAudio();
   revealTimer = setTimeout(() => {
+    resultRevealed = true;
     applyMode(mode);
     playModeSound(mode);
-    const main = resultEl.querySelector(".result-main");
-    const rest = resultEl.querySelector(".result-rest");
-    if (!rest) return;
-    if (mode === "nightmare" && main && !main.querySelector(".result-skull")) {
-      main.insertAdjacentHTML("beforeend", `<img class="result-skull" src="assets/skull.png" alt="Calavera" />`);
-    }
-    rest.innerHTML = `
-      ${destiny}
-      ${hdiHtml}
-      <p class="result-copy">
-        Probabilidad real: <strong>${formatPct(country.probability)}</strong>
-        · 1 de cada ${oneIn(country.probability)} nacimientos en el mundo ocurre aquí.
-      </p>
-      <div class="metrics">
-        <div class="metric"><span>Nacimientos al año</span><strong>${formatInt(country.births)}</strong></div>
-        <div class="metric"><span>Población</span><strong>${formatInt(country.population)}</strong></div>
-        <div class="metric"><span>Tasa de natalidad</span><strong>${country.cbr.toFixed(1)} ‰</strong></div>
-        <div class="metric"><span>IDH</span><strong>${country.hdi == null ? "s/d" : country.hdi.toFixed(3)}</strong></div>
-      </div>
-    `;
-    requestAnimationFrame(() => rest.classList.add("is-in"));
+    revealResultDetails(country, mode);
   }, 1100);
+}
+
+function showResult(country) {
+  renderResult(country, { revealed: false, replay: true });
+}
+
+function renderMethod() {
+  methodEl.textContent = t("method", { source: t("source") });
 }
 
 function renderStats() {
   statsEl.innerHTML = `
-    <div class="stat"><b>${data.count}</b><span>países</span></div>
-    <div class="stat"><b>${formatInt(data.totalBirths)}</b><span>nacimientos/año</span></div>
-    <div class="stat"><b>${formatPct(slices[0].probability, 1)}</b><span>es ${slices[0].name}</span></div>
+    <div class="stat"><b>${data.count}</b><span>${t("statsCountries")}</span></div>
+    <div class="stat"><b>${formatInt(data.totalBirths)}</b><span>${t("statsBirths")}</span></div>
+    <div class="stat"><b>${formatPct(slices[0].probability, 1)}</b><span>${t("statsIs", { name: countryName(slices[0]) })}</span></div>
   `;
 }
 
 function renderRanking(filter = "") {
   const q = filter.trim().toLowerCase();
-  const rows = slices.filter((c) => !q || c.name.toLowerCase().includes(q) || c.nameEn.toLowerCase().includes(q));
+  const rows = slices.filter((c) =>
+    !q || countryName(c).toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || c.nameEn.toLowerCase().includes(q)
+  );
   rankingEl.innerHTML = rows.map((c, i) => {
     const width = (c.births / maxBirths) * 100;
+    const hdiText = c.hdi == null
+      ? t("hdiNone")
+      : t("rankHdi", { hdi: formatDecimal(c.hdi, 3), mode: modeLabel(difficulty(c.hdi)) });
     return `
       <li data-iso="${c.iso3}">
         <span>${q ? "" : i + 1}</span>
         <img alt="" src="${flagUrl(c.iso2, 40)}" />
         <div class="rank-name">
-          <strong>${c.name}</strong>
+          <strong>${countryName(c)}</strong>
           <div class="bar"><i style="width:${width}%"></i></div>
         </div>
         <div class="rank-meta">
           <span class="rank-pct">${formatPct(c.probability)}</span>
-          <span class="rank-hdi">${c.hdi == null ? "IDH s/d" : `IDH ${c.hdi.toFixed(3)} · ${MODE_LABEL[difficulty(c.hdi)]}`}</span>
+          <span class="rank-hdi">${hdiText}</span>
         </div>
       </li>
     `;
@@ -749,11 +847,16 @@ function spin() {
 }
 
 async function init() {
+  const saved = localStorage.getItem(LANG_KEY);
+  if (saved === "en" || saved === "es") lang = saved;
+  else lang = await detectLang();
+  applyStaticCopy();
+
   const response = await fetch("./data/countries.json");
   data = await response.json();
   slices = prepareSlices(data.countries);
   maxBirths = slices[0].births;
-  methodEl.textContent = `${data.method} Modos por IDH: fácil ≥ 0,900; intermedio ≥ 0,700; difícil ≥ 0,550; pesadilla < 0,550. Fuente: ${data.source}`;
+  renderMethod();
   renderStats();
   renderRanking();
   resizeCanvas();
@@ -762,6 +865,10 @@ async function init() {
 spinBtn.addEventListener("click", spin);
 searchEl.addEventListener("input", () => renderRanking(searchEl.value));
 window.addEventListener("resize", resizeCanvas);
+document.querySelector(".lang-switch").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-lang]");
+  if (btn) setLang(btn.dataset.lang, true);
+});
 rankingEl.addEventListener("click", (event) => {
   const row = event.target.closest("li");
   if (!row || spinning) return;
@@ -774,6 +881,6 @@ rankingEl.addEventListener("click", (event) => {
 });
 
 init().catch((err) => {
-  hintEl.textContent = "No se pudieron cargar los países. Abrí la app con el servidor local.";
+  hintEl.textContent = t("loadError");
   console.error(err);
 });
