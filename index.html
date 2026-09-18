@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rueda natal · probabilidad de nacer en cada país</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="fx" class="fx-layer" aria-hidden="true"></canvas>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <header class="hero">
+    <p class="eyebrow">197 países · ponderada por nacimientos reales</p>
+    <h1>La rueda de nacer</h1>
+    <p class="lede">
+      Cada sector ocupa un ángulo proporcional a los nacimientos anuales de ese país.
+      Girar es equivalente a nacer al azar en el mundo de hoy.
+    </p>
+  </header>
+
+  <main class="layout">
+    <section class="wheel-panel" aria-label="Rueda de la fortuna">
+      <div class="wheel-stage">
+        <div class="pointer" aria-hidden="true"></div>
+        <canvas id="wheel" width="720" height="720"></canvas>
+        <button id="spin" class="hub" type="button">
+          <span class="hub-kicker">Nacer</span>
+          <span class="hub-label">Girar</span>
+        </button>
+      </div>
+      <p class="hint" id="hint">Hacé clic en el centro para girar. El tamaño de cada país es su probabilidad real.</p>
+    </section>
+
+    <aside class="side">
+      <article class="result-card" id="result" aria-live="polite">
+        <p class="result-kicker">Todavía no naciste</p>
+        <h2>Girala y descubrí dónde nacerías</h2>
+        <p class="result-copy">
+          India concentra más de 1 de cada 6 nacimientos. El Vaticano, casi ninguno.
+          La rueda no es justa: el mundo tampoco lo es.
+        </p>
+      </article>
+
+      <section class="stats" id="stats"></section>
+
+      <section class="list-wrap">
+        <div class="list-head">
+          <h3>Todos los países</h3>
+          <input id="search" type="search" placeholder="Buscar país…" autocomplete="off" />
+        </div>
+        <ol id="ranking" class="ranking"></ol>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    <p id="method"></p>
+  </footer>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
